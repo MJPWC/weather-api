@@ -1,0 +1,15 @@
+# =====================================================
+# Environment: LOCAL
+# =====================================================
+
+http:
+  host: "0.0.0.0"
+  port: "8081"
+
+openmeteo:
+  host: "api.open-meteo.com"
+  port: "443"
+
+# Logging level override per env
+logging:
+  level: "DEBUG"

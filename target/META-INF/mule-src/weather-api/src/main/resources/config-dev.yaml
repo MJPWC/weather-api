@@ -1,0 +1,14 @@
+# =====================================================
+# Environment: DEV (CloudHub / RTF)
+# =====================================================
+
+http:
+  host: "0.0.0.0"
+  port: "8081"
+
+openmeteo:
+  host: "api.open-meteo.com"
+  port: "443"
+
+logging:
+  level: "INFO"

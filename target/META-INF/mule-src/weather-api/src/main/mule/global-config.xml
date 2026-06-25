@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:configuration-properties="http://www.mulesoft.org/schema/mule/configuration-properties" xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core
+          http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/configuration-properties
+          http://www.mulesoft.org/schema/mule/configuration-properties/current/mule-configuration-properties.xsd">
+
+    <!--
+        Loads config-{env}.yaml based on the 'mule.env' system property.
+        Default: local
+        Override at deploy time:
+          -Dmule.env=dev   (Studio / CLI)
+          Anypoint Runtime Manager: add property mule.env=dev
+    
+    <configuration-properties:config
+        doc:name="Configuration Properties"
+        file="config-${mule.env:local}.yaml" />-->
+	<configuration-properties doc:name="Configuration properties" doc:id="178bb7d2-1d67-42f0-8531-6c720bcf9ef5" file="config-dev.yaml" />
+
+
+</mule>

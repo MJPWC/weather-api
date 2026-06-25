@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+        http://www.mulesoft.org/schema/mule/core
+          http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http
+          http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/ee/core
+          http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/mule-apikit
+          http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
+
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="03d403fa-c802-43e1-9dd2-fe8e8c243238" >
+		<http:listener-connection host="${http.host}" port="${http.port}" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="Open Meteo Request Config" doc:id="f0e0ed02-e4ca-4daf-97a8-a329cacb9ff1" >
+		<http:request-connection protocol="HTTPS" host="${openmeteo.host}" port="${openmeteo.port}"/>
+	</http:request-config>
+	<flow name="weather-experience-flow" doc:name="Weather Experience Flow">
+
+        <http:listener doc:name="POST /api/weather"
+                       config-ref="HTTP_Listener_config"
+                       path="/api/weather"
+                       allowedMethods="POST">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[{ 'Content-Type': 'application/json' }]]]>
+                </http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[{ 'Content-Type': 'application/json' }]]]>
+                </http:headers>
+            </http:error-response>
+        </http:listener>
+
+        <!-- Step 1: Validate incoming request body -->
+        <flow-ref name="validate-request-flow" doc:name="Validate Request" />
+
+        
+
+        <!-- Global Error Handler -->
+        <error-handler>
+            <on-error-propagate type="APP:VALIDATION_ERROR" doc:name="Validation Error">
+                <ee:transform doc:name="Build 400 Response">
+                    <ee:message>
+                        <ee:set-payload>
+                            <![CDATA[%dw 2.0
+output application/json
+---
+{
+    "status"  : "error",
+    "code"    : 400,
+    "message" : error.description
+}]]>
+                        </ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="HTTP:CONNECTIVITY, HTTP:TIMEOUT" doc:name="External API Unreachable">
+                <logger level="ERROR"
+                        doc:name="Log Connectivity Error"
+                        message="#['[WeatherAPI] Cannot reach Open-Meteo: ' ++ error.description]" />
+                <ee:transform doc:name="Build 503 Response">
+                    <ee:message>
+                        <ee:set-payload>
+                            <![CDATA[%dw 2.0
+output application/json
+---
+{
+    "status"  : "error",
+    "code"    : 503,
+    "message" : "Weather service is currently unavailable. Please retry after some time."
+}]]>
+                        </ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="ANY" doc:name="Generic Error">
+                <logger level="ERROR"
+                        doc:name="Log Unexpected Error"
+                        message="#['[WeatherAPI] Unexpected error: ' ++ error.description]" />
+                <ee:transform doc:name="Build 500 Response">
+                    <ee:message>
+                        <ee:set-payload>
+                            <![CDATA[%dw 2.0
+output application/json
+---
+{
+    "status"  : "error",
+    "code"    : 500,
+    "message" : "An unexpected error occurred. Please contact support."
+}]]>
+                        </ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+
+    </flow>
+
+
+    <!-- ===================================================
+         VALIDATION FLOW
+         Raises APP:VALIDATION_ERROR for bad input
+    =================================================== -->
+	<flow name="validate-request-flow" doc:name="Validate Request Flow">
+
+        <choice doc:name="Validate Required Fields">
+            <when expression="#[payload.latitude == null or payload.longitude == null]">
+                <raise-error type="APP:VALIDATION_ERROR"
+                             description="'latitude' and 'longitude' are required fields."
+                             doc:name="Missing Coordinates" />
+            </when>
+            <when expression="#[payload.latitude &lt; -90.0 or payload.latitude &gt; 90.0]">
+                <raise-error type="APP:VALIDATION_ERROR"
+                             description="'latitude' must be between -90 and 90."
+                             doc:name="Invalid Latitude" />
+            </when>
+            <when expression="#[payload.longitude &lt; -180.0 or payload.longitude &gt; 180.0]">
+                <raise-error type="APP:VALIDATION_ERROR"
+                             description="'longitude' must be between -180 and 180."
+                             doc:name="Invalid Longitude" />
+            </when>
+            <otherwise>
+                <logger level="DEBUG"
+                        doc:name="Validation Passed"
+                        message="[WeatherAPI] Input validation passed." />
+				<flow-ref doc:name="call weather-api-validation-success-Flow" doc:id="b0abd860-cbed-498f-ad23-0b15a26e53b1" name="weather-api-validation-success-Flow"/>
+            
+</otherwise>
+        </choice>
+
+    </flow>
+
+
+    <!-- ===================================================
+         PROCESS FLOW
+         Calls System API and applies business transformations
+    =================================================== -->
+    <flow name="weather-api-validation-success-Flow" doc:id="37f24d59-2de3-4b18-8f59-c198ede3a6c4">
+    	<!-- Step 2: Log the incoming request -->
+        <logger level="INFO"
+                doc:name="Log Incoming Request"
+                message="#['[WeatherAPI] Request received for city: ' ++ (payload.city default 'unknown')]" />
+
+        <!-- Step 3: Set variables from request -->
+        <ee:transform doc:name="Extract Request Variables">
+            <ee:variables>
+                <ee:set-variable variableName="latitude">
+                    <![CDATA[%dw 2.0
+output application/java
+---
+payload.latitude]]>
+                </ee:set-variable>
+                <ee:set-variable variableName="longitude">
+                    <![CDATA[%dw 2.0
+output application/java
+---
+payload.longitude]]>
+                </ee:set-variable>
+                <ee:set-variable variableName="cityName">
+                    <![CDATA[%dw 2.0
+output application/java
+---
+payload.city default "Unknown"]]>
+                </ee:set-variable>
+                <ee:set-variable variableName="units">
+                    <![CDATA[%dw 2.0
+output application/java
+---
+payload.units default "celsius"]]>
+                </ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <!-- Step 4: Call Process Flow -->
+        <flow-ref name="weather-process-flow" doc:name="Call Process Flow" />
+
+        <!-- Step 5: Final Response Transformation -->
+        <ee:transform doc:name="Build Final API Response">
+            <ee:message>
+                <ee:set-payload>
+                    <![CDATA[%dw 2.0
+output application/json
+---
+{
+    "status"     : "success",
+    "requestId"  : uuid(),
+    "city"       : vars.cityName,
+    "units"      : vars.units,
+    "weather"    : payload
+}]]>
+                </ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="INFO"
+                doc:name="Log Response Sent"
+                message="#['[WeatherAPI] Response dispatched for: ' ++ vars.cityName]" />
+    </flow>
+	<flow name="weather-process-flow" doc:name="Weather Process Flow">
+
+        <!-- Call System API Flow to fetch raw data -->
+        <flow-ref name="openmeteo-system-flow" doc:name="Call System API" />
+
+        <!-- Apply business logic transformation -->
+        <ee:transform doc:name="Transform to Business Object">
+            <ee:message>
+                <ee:set-payload>
+                    <![CDATA[%dw 2.0
+output application/json
+
+// ---- Helper functions ----
+fun weatherCodeToDescription(code: Number): String =
+    if      (code == 0)                   "Clear sky"
+    else if (code == 1)                   "Mainly clear"
+    else if (code == 2)                   "Partly cloudy"
+    else if (code == 3)                   "Overcast"
+    else if (code >= 45 and code <= 48)   "Foggy"
+    else if (code >= 51 and code <= 55)   "Drizzle"
+    else if (code >= 61 and code <= 65)   "Rain"
+    else if (code >= 71 and code <= 75)   "Snow"
+    else if (code >= 80 and code <= 82)   "Rain showers"
+    else if (code >= 95 and code <= 99)   "Thunderstorm"
+    else                                   "Unknown"
+
+fun heatIndex(temp: Number, humidity: Number): String =
+    if (temp >= 40)        "Extreme heat — stay hydrated!"
+    else if (temp >= 35)   "Very hot"
+    else if (temp >= 27)   "Hot"
+    else if (temp >= 20)   "Comfortable"
+    else if (temp >= 10)   "Cool"
+    else                   "Cold"
+
+var current    = payload.current
+var hourly     = payload.hourly
+var units      = payload.current_units
+var tempUnit   = units.temperature_2m default "°C"
+---
+{
+    "current": {
+        "temperature"         : current.temperature_2m ++ " " ++ tempUnit,
+        "feelsLike"           : current.apparent_temperature ++ " " ++ tempUnit,
+        "humidity"            : current.relative_humidity_2m ++ " %",
+        "windSpeed"           : current.wind_speed_10m ++ " " ++ (units.wind_speed_10m default "km/h"),
+        "windDirection"       : current.wind_direction_10m ++ "°",
+        "condition"           : weatherCodeToDescription(current.weather_code),
+        "isDay"               : if (current.is_day == 1) "Day" else "Night",
+        "heatAdvisory"        : heatIndex(current.temperature_2m, current.relative_humidity_2m),
+        "observedAt"          : current.time
+    },
+    "hourlyForecast": hourly.time[0 to 5] map ((t, i) -> {
+        "time"        : t,
+        "temperature" : hourly.temperature_2m[i] ++ " " ++ tempUnit,
+        "humidity"    : hourly.relative_humidity_2m[i] ++ " %",
+        "condition"   : weatherCodeToDescription(hourly.weather_code[i]),
+        "rainChance"  : hourly.precipitation_probability[i] ++ " %"
+    }),
+    "summary": "Fetched from Open-Meteo | Coordinates: (" ++ payload.latitude ++ ", " ++ payload.longitude ++ ")"
+}]]>
+                </ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+    </flow>
+
+
+    <!-- ===================================================
+         SYSTEM API FLOW
+         Calls Open-Meteo HTTPS endpoint
+    =================================================== -->
+    <flow name="openmeteo-system-flow" doc:name="Open Meteo System Flow">
+
+        <logger level="DEBUG"
+                doc:name="Log Outbound Call"
+                message="#['[WeatherAPI] Calling Open-Meteo for lat=' ++ vars.latitude ++ ' lon=' ++ vars.longitude]" />
+
+        <http:request method="GET"
+                      doc:name="GET Open-Meteo Forecast"
+                      config-ref="HTTP_Request_configuration"
+                      path="/v1/forecast">
+            <http:query-params><![CDATA[#[{
+                    "latitude"                    : vars.latitude,
+                    "longitude"                   : vars.longitude,
+                    "current"                     : "temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,is_day",
+                    "hourly"                      : "temperature_2m,relative_humidity_2m,weather_code,precipitation_probability",
+                    "temperature_unit"            : vars.units default "celsius",
+                    "wind_speed_unit"             : "kmh",
+                    "forecast_days"               : "1"
+                }]]]>
+            </http:query-params>
+        </http:request>
+
+        <!-- Parse JSON response from Open-Meteo -->
+        <ee:transform doc:name="Parse API Response">
+            <ee:message>
+                <ee:set-payload>
+                    <![CDATA[%dw 2.0
+output application/json
+---
+payload]]>
+                </ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger level="DEBUG"
+                doc:name="Log API Response Received"
+                message="[WeatherAPI] Open-Meteo response received successfully." />
+
+    </flow>
+
+
+    <!-- ===================================================
+         HEALTH CHECK FLOW
+         GET /api/health — for monitoring / load balancers
+    =================================================== -->
+    <flow name="health-check-flow" doc:name="Health Check Flow">
+
+        <http:listener doc:name="GET /api/health"
+                       config-ref="HTTP_Listener_config"
+                       path="/api/health"
+                       allowedMethods="GET" />
+
+        <ee:transform doc:name="Health Response">
+            <ee:message>
+                <ee:set-payload>
+                    <![CDATA[%dw 2.0
+output application/json
+---
+{
+    "status"      : "UP",
+    "service"     : "weather-api",
+    "version"     : "1.0.0",
+    "timestamp"   : now() as String { format: "yyyy-MM-dd'T'HH:mm:ssZ" }
+}]]>
+                </ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+    </flow>
+
+</mule>

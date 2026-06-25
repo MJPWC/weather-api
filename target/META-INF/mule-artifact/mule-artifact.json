@@ -1,0 +1,45 @@
+{
+  "configs": [
+    "global-config.xml",
+    "weather-api.xml",
+    "weather-api-test-suite.xml"
+  ],
+  "secureProperties": [],
+  "supportedJavaVersions": [],
+  "redeploymentEnabled": true,
+  "name": "com.mycompany:weather-api:1.0.0",
+  "minMuleVersion": "4.9.0",
+  "requiredProduct": "MULE_EE",
+  "classLoaderModelLoaderDescriptor": {
+    "id": "mule",
+    "attributes": {
+      "exportedResources": [
+        "application-types.xml",
+        "config-dev.yaml",
+        "config-local.yaml",
+        "global-config.xml",
+        "weather-api.xml",
+        "weatherexperienceFlowtest/assert_expression_payload_1.dwl",
+        "weatherexperienceFlowtest/assert_expression_payload_2.dwl",
+        "weatherexperienceFlowtest/assert_expression_payload_4.dwl",
+        "weatherexperienceFlowtest/assert_expression_payload_5.dwl",
+        "weatherexperienceFlowtest/mock_get-open-meteo-forecast_1_1.dwl",
+        "weatherexperienceFlowtest/mock_get-open-meteo-forecast_1_1_attributes.dwl",
+        "weatherexperienceFlowtest/set-event_attributes_1.dwl",
+        "weatherexperienceFlowtest/set-event_payload_1.dwl",
+        "weatherexperienceFlowtest/set-event_payload_2.dwl",
+        "weatherexperienceFlowtest/set-event_payload_3.dwl",
+        "weatherexperienceFlowtest/set-event_payload_4.dwl"
+      ],
+      "includeTestDependencies": "true",
+      "exportedPackages": []
+    }
+  },
+  "bundleDescriptorLoader": {
+    "id": "mule",
+    "attributes": {}
+  },
+  "javaSpecificationVersions": [
+    "17"
+  ]
+}
